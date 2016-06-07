@@ -811,7 +811,6 @@ var bot = window.bot = (function() {
 														y: window.snake.yy + Math.sin(window.snake.ang + dir) * headPathLength
 													};
 								if (canvasUtil.lineCross(bot.headCoord,headPathEnd,cCircle)) {
-									if (dir==0) bot.collisionPoints.push(collisionPoint);
 									bot.runPath[path]=false;
 								}	
 							}
@@ -952,7 +951,7 @@ var bot = window.bot = (function() {
             );
             bot.frontHeadCircle = canvasUtil.circle(
                 window.snake.xx + Math.cos(window.snake.ang ) * headCircleRadius * 2, window.snake.yy + Math.sin(window.snake.ang) * headCircleRadius * 2,
-                headCircleRadius * 2
+                headCircleRadius * 1.5
             );			
             if (window.visualDebugging) {
                 canvasUtil.drawCircle(bot.leftHeadCircle, 'blue', false);
