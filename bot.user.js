@@ -497,8 +497,6 @@ var bot = window.bot = (function() {
 				frontBlocker++;
 
 				
-			console.log("pdir:"+pdir);
-			console.log("direction:"+direction);
 				
 				
 			if (direction==10) //front collsion	
@@ -515,8 +513,7 @@ var bot = window.bot = (function() {
 				}
 				else		
 					window.setAcceleration(bot.defaultAccel);			
-				
-				console.log("bot.avoidCollisionPoint");
+	
 				bot.avoidCollisionPoint(collisionPoint);	
 				return;	
 			}
@@ -954,28 +951,30 @@ var bot = window.bot = (function() {
 								},
 								'green');
 							}
+            if (window.playing && window.visualDebugging) {
 
-            for (var path = 0; path < 5; path++) {
-				var pdir=(path -2) * 0.2;
-				
-				
-			var headPathEnd = 	{
-									x: window.snake.xx + + Math.cos(window.snake.ang + pdir) * bot.headPathLength,
-									y: window.snake.yy + Math.sin(window.snake.ang + pdir) * bot.headPathLength
-								};
-				if (bot.runPath[path])			
-					canvasUtil.drawLine(
-						bot.headCoord,
-						headPathEnd,
-						'white',0.5);	
-				else
-					canvasUtil.drawLine(
-						bot.headCoord,
-						headPathEnd,
-						'red');	
-				
+				for (var path = 0; path < 5; path++) {
+					var pdir=(path -2) * 0.2;
 					
-			}			
+					
+				var headPathEnd = 	{
+										x: window.snake.xx + + Math.cos(window.snake.ang + pdir) * bot.headPathLength,
+										y: window.snake.yy + Math.sin(window.snake.ang + pdir) * bot.headPathLength
+									};
+					if (bot.runPath[path])			
+						canvasUtil.drawLine(
+							bot.headCoord,
+							headPathEnd,
+							'white',0.5);	
+					else
+						canvasUtil.drawLine(
+							bot.headCoord,
+							headPathEnd,
+							'red');	
+					
+						
+				}		
+			}
         },
 
         // Checks to see if you are going to collide with anything in the collision detection radius
@@ -1002,17 +1001,11 @@ var bot = window.bot = (function() {
 			
 					
 
-			canvasUtil.drawLine(
-				bot.headCoord,
-				bot.headPathEnd,
-				'blue');
 			
 
             bot.getCollisionPoints();
             if (bot.collisionPoints.length === 0) return false;
 
-			var headLineCrossed = false;
-			var headLineCPoint;
 			var headIsLeft=false;
 			var headIsRight=false;
 			var headCollision;
@@ -1030,15 +1023,6 @@ var bot = window.bot = (function() {
                     radius: bot.collisionPoints[i].radius
                 };				
 				
-				if (canvasUtil.lineCross(bot.headCoord,bot.headPathEnd,cCircle)) {
-					headLineCrossed=true;
-					headLineCPoint=bot.collisionPoints[i];
-					if (bot.collisionPoints[i].head > 0)
-					{
-//						bot.avoidHeadPoint(bot.collisionPoints[i]);
-//						return true;
-					}
-				}
 
 					var collisionCircle = canvasUtil.circle(
 						bot.collisionPoints[i].xx,
@@ -1279,7 +1263,6 @@ var bot = window.bot = (function() {
 							bot.foodTimer, 1000 / bot.opt.targetFps * bot.opt.foodFrames*25);
 					}
 					
-					console.log("frontBlocked");
 				}
 				else if (bot.rightIsFree && bot.leftIsFree && bot.frontIsFree)
 				{
