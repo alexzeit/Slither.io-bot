@@ -462,65 +462,95 @@ var bot = window.bot = (function() {
         },
 
         // Avoid headPoint
-        avoidHeadPoint: function(collisionPoint) {
+        avoidHeadPoint: function(collisionPoint, direction) {
+		
+		
+		
 
 			var chang=0;
-			var dir= 10;
+			var pdir= 10;
 			var frontBlocker=0;
 			if (bot.runPath[0])
-				dir=(0 -2) * 0.2;
+				pdir=(0 -2) * 0.2;
 			else
 				frontBlocker++;
 
 			if (bot.runPath[4])
-				dir=(5 -2) * 0.2;
+				pdir=(4 -2) * 0.2;
 			else
 				frontBlocker++;
 
 			if (bot.runPath[1])
-				dir=(1 -1) * 0.2;
+				pdir=(1 -1) * 0.2;
 			else
 				frontBlocker++;
 				
 
 			if (bot.runPath[3])
-				dir=(5 -1) * 0.2;
+				pdir=(3 -1) * 0.2;
 			else
 				frontBlocker++;
 
 			if (bot.runPath[2])
-				dir=(2 -2) * 0.2;
+				pdir=(2 -2) * 0.2;
 			else
 				frontBlocker++;
 
 				
-			
-		
-			if (frontBlocker<5 && bot.frontIsFree ) 
-			{	
-				console.log("changeHeading:"+dir);				
-				//bot.avoidCollisionPoint(collisionPoint);
-				bot.changeHeading(dir);
-				if (window.snakes[collisionPoint.snake].sp > 6 || window.snakes[collisionPoint.snake].sc < 1.1)				
-					window.setAcceleration(1);
-				else
-					window.setAcceleration(bot.defaultAccel);
-			}
-			else
+			console.log("pdir:"+pdir);
+			console.log("direction:"+direction);
+				
+				
+			if (direction==10) //front collsion	
 			{
-//				console.log("bot.avoidCollisionPoint");
-				if (frontBlocker<2)
+				if (frontBlocker<4)
 				{
-					if (window.snakes[collisionPoint.snake].sp > 6 || window.snakes[collisionPoint.snake].sc < 1.1)				
+					if ((window.snakes[collisionPoint.snake].sp > 6 || window.snakes[collisionPoint.snake].sc < 1.1) && pdir==0)				
 						window.setAcceleration(1);
 					else
 						window.setAcceleration(bot.defaultAccel);
-				
+
+					bot.avoidCollisionPoint(collisionPoint);
+					return;
 				}
 				else		
 					window.setAcceleration(bot.defaultAccel);			
-				bot.avoidCollisionPoint(collisionPoint);
+				
+				console.log("bot.avoidCollisionPoint");
+				bot.avoidCollisionPoint(collisionPoint);	
+				return;	
 			}
+		
+
+
+				if (direction==1)
+				{
+					if (pdir==0)
+						pdir=-0.1;
+
+				}
+				if (direction==-1)
+				{
+					if (pdir==0)
+						pdir=0.1;
+
+				}
+
+				if (pdir==10)
+				{
+					bot.avoidCollisionPoint(collisionPoint);
+					return;
+				}
+				
+
+				bot.changeHeading(pdir);
+			
+				
+				if (window.snakes[collisionPoint.snake].sp > 6 || window.snakes[collisionPoint.snake].sc < 1.1 || direction==0)				
+					window.setAcceleration(1);
+				else
+					window.setAcceleration(bot.defaultAccel);
+			
         },
 
         // Change heading by ang
@@ -532,7 +562,6 @@ var bot = window.bot = (function() {
                 x: window.snake.xx + 500 * bot.cos,
                 y: window.snake.yy + 500 * bot.sin
             };
-
             var cos = Math.cos(-angle);
             var sin = Math.sin(-angle);
 
@@ -676,23 +705,14 @@ var bot = window.bot = (function() {
             bot.collisionPoints = [];
             bot.collisionAngles = [];
 			
-			var headPathLength=bot.snakeRadius * bot.opt.radiusMult * 5;
+			bot.headPathLength=bot.snakeRadius * bot.opt.radiusMult * 3;
 
 			
             for (var path = 0; path < 5; path++) {
-				var dir=(path -2) * 0.2;
+				var pdir=(path -2) * 0.2;
 				bot.runPath[path]=true;
-	/*			
-			var headPathEnd = 	{
-									x: window.snake.xx + + Math.cos(window.snake.ang + dir) * headPathLength,
-									y: window.snake.yy + Math.sin(window.snake.ang + dir) * headPathLength
-								};
-								
-				canvasUtil.drawLine(
-					bot.headCoord,
-					headPathEnd,
-					'white',0.5);	
-*/					
+				
+					
 			}
 			
 			
@@ -735,12 +755,12 @@ var bot = window.bot = (function() {
 								};
 								
 								for (var path = 0; path < 5; path++) {
-									var dir=(path -2) * 0.2;
+									var pdir=(path -2) * 0.2;
 									
 									
 									var headPathEnd = 	{
-															x: window.snake.xx + + Math.cos(window.snake.ang + dir) * headPathLength,
-															y: window.snake.yy + Math.sin(window.snake.ang + dir) * headPathLength
+															x: window.snake.xx + + Math.cos(window.snake.ang + pdir) * bot.headPathLength,
+															y: window.snake.yy + Math.sin(window.snake.ang + pdir) * bot.headPathLength
 														};
 									if (canvasUtil.lineCross(bot.headCoord,headPathEnd,cCircle)) {
 										
@@ -803,12 +823,12 @@ var bot = window.bot = (function() {
 					
 
 							for (var path = 0; path < 5; path++) {
-								var dir=(path -3) * 0.2;
+								var pdir=(path -3) * 0.2;
 								
 								
 								var headPathEnd = 	{
-														x: window.snake.xx + + Math.cos(window.snake.ang + dir) * headPathLength,
-														y: window.snake.yy + Math.sin(window.snake.ang + dir) * headPathLength
+														x: window.snake.xx + + Math.cos(window.snake.ang + pdir) * bot.headPathLength,
+														y: window.snake.yy + Math.sin(window.snake.ang + pdir) * bot.headPathLength
 													};
 								if (canvasUtil.lineCross(bot.headCoord,headPathEnd,cCircle)) {
 									bot.runPath[path]=false;
@@ -935,12 +955,32 @@ var bot = window.bot = (function() {
 								'green');
 							}
 
-			
+            for (var path = 0; path < 5; path++) {
+				var pdir=(path -2) * 0.2;
+				
+				
+			var headPathEnd = 	{
+									x: window.snake.xx + + Math.cos(window.snake.ang + pdir) * bot.headPathLength,
+									y: window.snake.yy + Math.sin(window.snake.ang + pdir) * bot.headPathLength
+								};
+				if (bot.runPath[path])			
+					canvasUtil.drawLine(
+						bot.headCoord,
+						headPathEnd,
+						'white',0.5);	
+				else
+					canvasUtil.drawLine(
+						bot.headCoord,
+						headPathEnd,
+						'red');	
+				
+					
+			}			
         },
 
         // Checks to see if you are going to collide with anything in the collision detection radius
         checkCollision: function() {
-			var headCircleRadius = bot.opt.radiusMult * (30+bot.snakeRadius) / 6;
+			var headCircleRadius = bot.opt.radiusMult * (30+bot.snakeRadius) / 4;
             bot.leftHeadCircle = canvasUtil.circle(
                 window.snake.xx + Math.cos(window.snake.ang - Math.PI/1.7) * headCircleRadius*1.2, window.snake.yy + Math.sin(window.snake.ang - Math.PI/1.7) * headCircleRadius*1.2,
                 headCircleRadius
@@ -950,8 +990,8 @@ var bot = window.bot = (function() {
                 headCircleRadius
             );
             bot.frontHeadCircle = canvasUtil.circle(
-                window.snake.xx + Math.cos(window.snake.ang ) * headCircleRadius * 2, window.snake.yy + Math.sin(window.snake.ang) * headCircleRadius * 2,
-                headCircleRadius * 1.5
+                window.snake.xx + Math.cos(window.snake.ang ) * headCircleRadius * 1.3, window.snake.yy + Math.sin(window.snake.ang) * headCircleRadius * 1.3,
+                headCircleRadius
             );			
             if (window.visualDebugging) {
                 canvasUtil.drawCircle(bot.leftHeadCircle, 'blue', false);
@@ -973,6 +1013,9 @@ var bot = window.bot = (function() {
 
 			var headLineCrossed = false;
 			var headLineCPoint;
+			var headIsLeft=false;
+			var headIsRight=false;
+			var headCollision;
             for (var i = 0; i < bot.collisionPoints.length; i++) {
                 // -1 snake is special case for non snake object.
 
@@ -1007,16 +1050,16 @@ var bot = window.bot = (function() {
 				if (bot.collisionPoints[i].head > 0)
 				{
 					if (canvasUtil.circleIntersect(bot.frontHeadCircle, collisionCircle)) {
-						bot.avoidHeadPoint(bot.collisionPoints[i]);
+						bot.avoidHeadPoint(bot.collisionPoints[i],10);
 						return true;				
 					}
 					if (canvasUtil.circleIntersect(bot.leftHeadCircle, collisionCircle)) {
-						bot.avoidHeadPoint(bot.collisionPoints[i]);
-						return true;				
+						headCollision=bot.collisionPoints[i];
+						headIsLeft=true;
 					}
 					if (canvasUtil.circleIntersect(bot.rightHeadCircle, collisionCircle)) {
-						bot.avoidHeadPoint(bot.collisionPoints[i]);
-						return true;				
+						headCollision=bot.collisionPoints[i];
+						headIsRight=true;
 					}
 				}
 				else if (canvasUtil.circleIntersect(bot.frontHeadCircle, collisionCircle)) {
@@ -1025,11 +1068,24 @@ var bot = window.bot = (function() {
 					}
 				
             }
-			if (headLineCrossed)
+			
+			
+			if (headIsLeft && headIsRight)
 			{
-//				bot.avoidCollisionPoint(headLineCPoint);
+				bot.avoidHeadPoint(headCollision,0);
+				return true;				
 			}
-            window.setAcceleration(bot.defaultAccel);
+			if (headIsLeft)
+			{
+				bot.avoidHeadPoint(headCollision,1);
+				return true;				
+			}
+			if (headIsRight)
+			{
+				bot.avoidHeadPoint(headCollision,-1);
+				return true;				
+			}
+//            window.setAcceleration(bot.defaultAccel);
             return false;
         },
 
@@ -1208,7 +1264,7 @@ var bot = window.bot = (function() {
 					if (!bot.runPath[path])
 					frontBlocked++;
 				}		
-				if (frontBlocked == 15)
+				if (frontBlocked == 5)
 				{
 					if (bot.rightIsFree) 
 						bot.changeHeading(-Math.PI);
@@ -1220,7 +1276,7 @@ var bot = window.bot = (function() {
 					if (bot.foodTimeout) {
 						window.clearTimeout(bot.foodTimeout);
 						bot.foodTimeout = window.setTimeout(
-							bot.foodTimer, 1000 / bot.opt.targetFps * bot.opt.foodFrames*15);
+							bot.foodTimer, 1000 / bot.opt.targetFps * bot.opt.foodFrames*25);
 					}
 					
 					console.log("frontBlocked");
@@ -1240,9 +1296,9 @@ var bot = window.bot = (function() {
 					window.setAcceleration(bot.defaultAccel);
 					
 					if (bot.rightIsFree) 
-						bot.changeHeading(-0.2);
+						bot.changeHeading(-0.02);
 					if (bot.leftIsFree) 
-						bot.changeHeading(0.2);
+						bot.changeHeading(0.02);
 					
 					if (bot.foodTimeout === undefined) {
 						bot.foodTimeout = window.setTimeout(
