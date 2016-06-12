@@ -1492,7 +1492,7 @@ var userInterface = window.userInterface = (function() {
 
             if (window.playing && bot.isBotEnabled && window.snake !== null) {
                 window.onmousemove = function(b) {
-					if (bot.manualFood) original_onmousemove();
+					if (bot.manualFood && !bot.isCollision) original_onmousemove();
 					if (bot.mouseFollow){
 					bot.mGoToAngle = canvasUtil.mouseAngle(b);
 					}
