@@ -380,6 +380,7 @@ var bot = window.bot = (function() {
         defaultAccel: 0,
         sectorBox: {},
         currentFood: {},
+		foodAccelDist: 200000,
         opt: {
             // These are the bot's default options
             // If you wish to customise these, use
@@ -774,7 +775,7 @@ var bot = window.bot = (function() {
 								'white', 0.3);
 							}
 						}
-						var angleScore = bot.fullHeadCircleRadius / bot.collisionAngles[i].distance * (bot.collisionAngles[i].isHead+7);
+						var angleScore = bot.fullHeadCircleRadius / bot.collisionAngles[i].distance * (bot.collisionAngles[i].isHead+12);
 						midCollisionAngle_x += Math.cos(bot.collisionAngles[i].ang) * angleScore;
 						midCollisionAngle_y += Math.sin(bot.collisionAngles[i].ang) * angleScore;
 
@@ -794,7 +795,7 @@ var bot = window.bot = (function() {
 
         // Checks to see if you are going to collide with anything in the collision detection radius
         checkCollision: function() {
-			bot.headCircleRadius = bot.opt.radiusMult * bot.snakeRadius / 1.5;
+			bot.headCircleRadius = bot.opt.radiusMult * bot.snakeRadius / 2;
             var headCircle = canvasUtil.circle(
                 window.snake.xx,
 				window.snake.yy,
@@ -817,14 +818,18 @@ var bot = window.bot = (function() {
 
             if (window.visualDebugging) {
 				if (bot.isCollision) {
-					canvasUtil.drawAngle(sang-bot.frontArcAngle/2, sang+bot.frontArcAngle/2, bot.frontArcRadius, 'red', false);
 					canvasUtil.drawCircle(headCircle, 'red', false);
 				}
 				else {
-					canvasUtil.drawAngle(sang-bot.frontArcAngle/2, sang+bot.frontArcAngle/2, bot.frontArcRadius, 'blue', false);
 					canvasUtil.drawCircle(headCircle, 'blue', false);
 				}
-				canvasUtil.drawCircle(fullHeadCircle, 'red');
+				if (bot.frontCollision) {
+					canvasUtil.drawAngle(sang-bot.frontArcAngle/2, sang+bot.frontArcAngle/2, bot.frontArcRadius, 'red', false);
+				}
+				else {
+					canvasUtil.drawAngle(sang-bot.frontArcAngle/2, sang+bot.frontArcAngle/2, bot.frontArcRadius, 'blue', false);
+				}
+				canvasUtil.drawCircle(fullHeadCircle, 'gray', false);
             }
             if (bot.isCollision) {
 
@@ -933,12 +938,12 @@ var bot = window.bot = (function() {
 
                 if (
                     bot.collisionAngles[aIndex] && bot.collisionAngles[aIndex].distance >
-                    bot.currentFood.distance + bot.snakeWidth * bot.opt.radiusMult &&
-                    bot.currentFood.da < bot.opt.foodAccelAngle) {
+                    bot.currentFood.distance + bot.frontArcRadius * 2 &&
+                    bot.currentFood.da < bot.opt.foodAccelAngle && bot.currentFood.distance > bot.foodAccelDist) {
                     return 1;
                 }
 
-                if (bot.collisionAngles[aIndex] === undefined) {
+                if (bot.collisionAngles[aIndex] === undefined && bot.currentFood.distance > bot.foodAccelDist) {
                     return 1;
                 }
             }
@@ -1280,7 +1285,6 @@ var userInterface = window.userInterface = (function() {
 						url = prompt('Please enter a background url or let it empty for black background:');
 
 					if (url !== null && url !== '') {
-						console.log('url'+url);
                         canvasUtil.setBackground(url);
                     }
 					else if (actbackground == 'black' || actbackground==='')
@@ -1422,17 +1426,15 @@ var userInterface = window.userInterface = (function() {
             oContent.push('[T / Right click] bot: ' + ht(bot.isBotEnabled));
             oContent.push('[O] mobile rendering: ' + ht(window.mobileRender));
             oContent.push('[A/S] radius multiplier: ' + bot.opt.radiusMult);
-			oContent.push('[N] Follow the mouse: ' + ht(bot.mouseFollow));
+			oContent.push('[N] mouse follow: ' + ht(bot.mouseFollow));
 			oContent.push('[M] manually feed: ' + ht(bot.manualFood));
             oContent.push('[D] quick radius change ' +bot.opt.radiusApproachSize + '/' + bot.opt.radiusAvoidSize);
             oContent.push('[I] auto respawn: ' + ht(window.autoRespawn));
             oContent.push('[G] leaderboard overlay: ' + ht(window.leaderboard));
             oContent.push('[Y] visual debugging: ' + ht(window.visualDebugging));
-            oContent.push('[U] log debugging: ' + ht(window.logDebugging));
             oContent.push('[H] overlays');
-            oContent.push('[B] change background url or set to black');
+            oContent.push('[B] change background');
             oContent.push('[Mouse Wheel] zoom');
-            oContent.push('[Z] reset zoom');
             oContent.push('[ESC] quick respawn');
             oContent.push('[Q] quit to menu');
             userInterface.overlays.prefOverlay.innerHTML = oContent.join('<br/>');
@@ -1516,7 +1518,11 @@ var userInterface = window.userInterface = (function() {
 
                 if (window.autoRespawn) {
                     bot.startTime = Date.now();
-                    window.connect();
+					var srv = inpIP.value.trim().split(":");
+					console.log("srv[0]"+srv[0]);
+					window.bso.ip = srv[0];
+					window.bso.po = srv[1];
+					window.connect();
                 }
             }
 
