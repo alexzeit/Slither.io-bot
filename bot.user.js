@@ -1040,11 +1040,11 @@ var bot = window.bot = (function() {
 
         // Timer version of food check
         foodTimer: function() {
-            if (window.playing && bot.lookForFood &&
+            if (window.playing && bot.lookForFood && !bot.manualFood &&
                 window.snake !== null && window.snake.alive_amt === 1) {
                 bot.computeFoodGoal();
                 window.goalCoordinates = bot.currentFood;
-                if(!bot.manualFood) canvasUtil.setMouseCoordinates(canvasUtil.mapToMouse(window.goalCoordinates));
+                canvasUtil.setMouseCoordinates(canvasUtil.mapToMouse(window.goalCoordinates));
             }
             bot.foodTimeout = undefined;
         }
@@ -1236,8 +1236,8 @@ var userInterface = window.userInterface = (function() {
                 if (e.keyCode === 77) {
                     bot.manualFood = !bot.manualFood;
                 }
-				 // Letter `F` to follow the mouse move while feed search
-                if (e.keyCode === 70) {
+				 // Letter `N` to follow the mouse move while feed search
+                if (e.keyCode === 78) {
                     bot.mouseFollow = !bot.mouseFollow;
                 }
                 // Letter `T` to toggle bot
@@ -1422,7 +1422,7 @@ var userInterface = window.userInterface = (function() {
             oContent.push('[T / Right click] bot: ' + ht(bot.isBotEnabled));
             oContent.push('[O] mobile rendering: ' + ht(window.mobileRender));
             oContent.push('[A/S] radius multiplier: ' + bot.opt.radiusMult);
-			oContent.push('[F] Follow the mouse: ' + ht(bot.mouseFollow));
+			oContent.push('[N] Follow the mouse: ' + ht(bot.mouseFollow));
 			oContent.push('[M] manually feed: ' + ht(bot.manualFood));
             oContent.push('[D] quick radius change ' +bot.opt.radiusApproachSize + '/' + bot.opt.radiusAvoidSize);
             oContent.push('[I] auto respawn: ' + ht(window.autoRespawn));
