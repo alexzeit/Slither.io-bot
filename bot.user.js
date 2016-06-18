@@ -164,17 +164,15 @@ var canvasUtil = window.canvasUtil = (function() {
         },
         // Fast atan2
         fastAtan2: function(y, x) {
-            const QPI = Math.PI / 4;
-            const TQPI = 3 * Math.PI / 4;
             var r = 0.0;
             var angle = 0.0;
             var abs_y = Math.abs(y) + 1e-10;
             if (x < 0) {
                 r = (x + abs_y) / (abs_y - x);
-                angle = TQPI;
+                angle = 3 * Math.PI / 4;
             } else {
                 r = (x - abs_y) / (x + abs_y);
-                angle = QPI;
+                angle = Math.PI / 4;
             }
             angle += (0.1963 * r * r - 0.9817) * r;
             if (y < 0) {
@@ -367,12 +365,18 @@ var canvasUtil = window.canvasUtil = (function() {
 var bot = window.bot = (function() {
     return {
 		manualFood: false,
+		targetAcceleration: 0,
+		arcSize: Math.PI / 20,
 		mGoToAngle: Math.PI,
 		mouseFollow: false,
+		predatorMode: true,
+		lookForSnakeDelayCnt: 0,
+		lookForSnakeDelay: 100,
+		isHunting: false,
+		huntSnake: false,
         isBotRunning: false,
         isBotEnabled: true,
         lookForFood: false,
-        collisionPoints: [],
         collisionAngles: [],
         scores: [],
         foodTimeout: undefined,
@@ -380,17 +384,17 @@ var bot = window.bot = (function() {
         defaultAccel: 0,
         sectorBox: {},
         currentFood: {},
-		foodAccelDist: 200000,
+		foodAccelDist2: 200000,
+		foodAccelSize: 99,
+        foodFrames: 8,
+		accelAngle: Math.PI / 2.5,
         opt: {
             // These are the bot's default options
             // If you wish to customise these, use
             // customBotOptions above
+			radiusMult: 10,
             targetFps: 30,
-            arcSize: Math.PI / 8,
-            radiusMult: 10,
-            foodAccelSize: 60,
-            foodAccelAngle: Math.PI / 3,
-            foodFrames: 4,
+
             foodRoundSize: 5,
             foodRoundAngle: Math.PI / 8,
             foodSmallSize: 10,
@@ -402,6 +406,9 @@ var bot = window.bot = (function() {
         MID_X: 0,
         MID_Y: 0,
         MAP_R: 0,
+		pingtime: '',
+		checktime: 0,
+		pingDelay: 0,
 
         getSnakeWidth: function(sc) {
             if (sc === undefined) sc = window.snake.sc;
@@ -418,6 +425,58 @@ var bot = window.bot = (function() {
             window.forcing = false;
         },
 
+        indexBetween: function(i1, i2) {
+			var iDiff = i2 - i1;
+            if (iDiff > (2 * Math.PI) / bot.arcSize /2) 
+				iDiff = iDiff - (2 * Math.PI) / bot.arcSize;
+			else if (iDiff < -(2 * Math.PI) / bot.arcSize /2) 
+				iDiff = (2 * Math.PI) / bot.arcSize - iDiff;
+
+            return iDiff;
+        },		
+		
+		
+		calcAcceleration: function(a) {
+					var tAccel = 1;
+					var sang = window.snake.ehang;
+					var aIndex1 = bot.getAngleIndex(sang);
+					var aIndex2 = bot.getAngleIndex(a);
+					
+					
+					
+					var turnDir = bot.indexBetween(aIndex1, aIndex2);
+					
+					if ( Math.abs(turnDir) < bot.accelAngle / bot.arcSize)
+					{
+					
+						
+						if (turnDir < 0) 
+							turnDir = -1;
+						else
+							turnDir = 1;
+					
+						var aIndex = aIndex1;
+						while ((aIndex !== aIndex2 && aIndex1 !== aIndex2 || aIndex1 === aIndex2 && aIndex === aIndex1))
+						{
+							if ((bot.collisionAngles[aIndex] !== undefined && bot.collisionAngles[aIndex].distance < Math.pow(bot.headCircleRadius * 2.5, 2)))
+							{
+								tAccel = bot.defaultAccel;
+							}
+							aIndex = aIndex + turnDir;
+							if (aIndex1 !== aIndex2)
+							{
+								if (aIndex < 0) aIndex = (2 * Math.PI) / bot.arcSize - 1;
+								if (aIndex > (2 * Math.PI) / bot.arcSize ) aIndex = 0;
+							}
+						}
+						
+					}
+					else
+						tAccel = bot.defaultAccel;
+						
+					return (tAccel);
+		},
+		
         // angleBetween - get the smallest angle between two angles (0-pi)
         angleBetween: function(a1, a2) {
             var r1 = 0.0;
@@ -429,19 +488,7 @@ var bot = window.bot = (function() {
             return r1 < r2 ? -r1 : r2;
         },
 
-        // Avoid headPoint
-        avoidHeadPoint: function(collisionPoint) {
-            var cehang = canvasUtil.fastAtan2(
-                collisionPoint.yy - window.snake.yy, collisionPoint.xx - window.snake.xx);
-            var diff = bot.angleBetween(window.snake.ehang, cehang);
-
-            if (Math.abs(diff) > bot.opt.rearHeadAngle) {
-                var dir = diff > 0 ? -bot.opt.rearHeadDir : bot.opt.rearHeadDir;
-                bot.changeHeading(dir);
-            } else {
-                bot.avoidCollisionPoint(collisionPoint);
-            }
-        },
+		
 
         // Change heading by ang
         // +0-pi turn left
@@ -471,17 +518,24 @@ var bot = window.bot = (function() {
         // Avoid collision with gotoAngle
         avoidCollision: function() {
 
-
-//				window.setAcceleration(bot.defaultAccel);
+				
+				if (bot.targetAcceleration !== 1 && bot.speedMult > 1.6 ) 
+				{
+//									console.log("bot.speedMult "+bot.speedMult );
+					return; 
+				}
 
 				window.goalCoordinates = {
-										x: window.snake.xx+bot.headCircleRadius*Math.cos(bot.gotoAngle),
-										y: window.snake.yy+bot.headCircleRadius*Math.sin(bot.gotoAngle)
+										x: Math.round(window.snake.xx+bot.fullHeadCircleRadius*Math.cos(bot.gotoAngle)),
+										y: Math.round(window.snake.yy+bot.fullHeadCircleRadius*Math.sin(bot.gotoAngle))
 				};
 
 				canvasUtil.setMouseCoordinates(canvasUtil.mapToMouse(window.goalCoordinates));
 
+				
 				return;
+				
+				
 
         },
 
@@ -547,16 +601,15 @@ var bot = window.bot = (function() {
 
         // get collision angle index, expects angle +/i 0 to Math.PI
         getAngleIndex: function(angle) {
-            const ARCSIZE = bot.opt.arcSize = Math.PI / 40;
             var index;
 
             if (angle < 0) {
                 angle += 2 * Math.PI;
             }
 
-            index = Math.round(angle * (1 / ARCSIZE));
+            index = Math.round(angle * (1 / bot.arcSize));
 
-            if (index === (2 * Math.PI) / ARCSIZE) {
+            if (index === (2 * Math.PI) / bot.arcSize) {
                 return 0;
             }
             return index;
@@ -565,26 +618,22 @@ var bot = window.bot = (function() {
         // Add to collisionAngles if distance is closer
         addCollisionAngle: function(sp) {
             var ang = canvasUtil.fastAtan2(
-                Math.round(sp.yy - window.snake.yy),
-                Math.round(sp.xx - window.snake.xx));
+                (sp.yy - window.snake.yy),
+                (sp.xx - window.snake.xx));
             var aIndex = bot.getAngleIndex(ang);
-
-            var actualDistance = Math.round(Math.pow(
+			sp.aIndex=aIndex;	
+			
+            var actualDistance = (Math.pow(
                 Math.sqrt(sp.distance) - sp.radius, 2));
 
             if (bot.collisionAngles[aIndex] === undefined) {
                 bot.collisionAngles[aIndex] = {
-                    x: Math.round(sp.xx),
-                    y: Math.round(sp.yy),
-                    ang: ang,
+                    ang:  bot.arcSize * aIndex,
                     snake: sp.snake,
                     distance: actualDistance,
 					isHead: sp.isHead
                 };
             } else if (bot.collisionAngles[aIndex].distance > sp.distance) {
-                bot.collisionAngles[aIndex].x = Math.round(sp.xx);
-                bot.collisionAngles[aIndex].y = Math.round(sp.yy);
-                bot.collisionAngles[aIndex].ang = ang;
                 bot.collisionAngles[aIndex].snake = sp.snake;
                 bot.collisionAngles[aIndex].distance = actualDistance;
 				bot.collisionAngles[aIndex].isHead = sp.isHead;
@@ -592,19 +641,24 @@ var bot = window.bot = (function() {
         },
 
         // Get closest collision point per snake.
-        getCollisionPoints: function() {
-            var scPoint;
+        getCollision: function() {
+            
+			var scPoint;
+			var pts, i;
+			var collisionPoint;
 
-            bot.collisionPoints = [];
             bot.collisionAngles = [];
 
+			var fullHeadCircleRadius2 = Math.pow(bot.fullHeadCircleRadius, 2);
+			
+			bot.fencingSnake=false;
+			var escape_ang=-1;
 			var snake_minX = window.snake.xx;
 			var snake_maxX = window.snake.xx;
 			var snake_minY = window.snake.yy;
 			var snake_maxY = window.snake.yy;
-			bot.fencingSnake=false;
-			var escape_ang=-1;
-			for (var pts = 0, lp = window.snake.pts.length; pts < lp; pts++) {
+
+			for (pts = 0, lp = window.snake.pts.length; pts < lp; pts++) {
 				if (!window.snake.pts[pts].dying)
 				{
 					if (window.snake.pts[pts].xx < snake_minX) snake_minX = window.snake.pts[pts].xx;
@@ -612,41 +666,15 @@ var bot = window.bot = (function() {
 					if (window.snake.pts[pts].yy < snake_minY) snake_minY = window.snake.pts[pts].yy;
 					if (window.snake.pts[pts].yy > snake_maxY) snake_maxY = window.snake.pts[pts].yy;
 				}
-			}	
-
+			}
             for (var snake = 0, ls = window.snakes.length; snake < ls; snake++) {
                 scPoint = undefined;
+				var fencingAngles = [];
 
                 if (window.snakes[snake].id !== window.snake.id &&
                     window.snakes[snake].alive_amt === 1) {
 
-							var snakesp=Math.round((window.snakes[snake].sp) / 3) + 1;
-							var sncos = Math.cos(window.snakes[snake].ang);
-							var snsin = Math.sin(window.snakes[snake].ang);
-							var snradius=bot.getSnakeWidth(window.snakes[snake].sc) / 2;
-							for (var snp = 1; snp < snakesp; snp++) {
-
-								var collisionPoint = {
-									xx: window.snakes[snake].xx + (100+snradius)/10*snp * sncos*2,
-									yy: window.snakes[snake].yy+ (100+snradius)/10*snp * snsin*2,
-									snake: snake,
-									radius: snradius * (5+snp)/5,
-									isHead: window.snakes[snake].sp
-								};
-
-								if (window.visualDebugging) {
-									canvasUtil.drawCircle(canvasUtil.circle(
-											collisionPoint.xx,
-											collisionPoint.yy,
-											collisionPoint.radius),
-										'red', false);
-								}
-								canvasUtil.getDistance2FromSnake(collisionPoint);
-								//bot.collisionPoints.push(collisionPoint);
-								bot.addCollisionAngle(collisionPoint);
-
-							}
-
+					
                     scPoint = {
                         xx: window.snakes[snake].xx,
                         yy: window.snakes[snake].yy,
@@ -655,48 +683,90 @@ var bot = window.bot = (function() {
 						isHead: window.snakes[snake].sp
                     };
                     canvasUtil.getDistance2FromSnake(scPoint);
-                    bot.addCollisionAngle(scPoint);
-                    if (window.visualDebugging && false) {
-                        canvasUtil.drawCircle(canvasUtil.circle(
-                                scPoint.xx,
-                                scPoint.yy,
-                                scPoint.radius),
-                            'red', false);
-                    }
+					if (scPoint.distance < fullHeadCircleRadius2) {
+					
+						bot.addCollisionAngle(scPoint);
+						fencingAngles[scPoint.aIndex]= 1;
+						if (window.visualDebugging && false) {
+							canvasUtil.drawCircle(canvasUtil.circle(
+									scPoint.xx,
+									scPoint.yy,
+									scPoint.radius),
+								'red', false);
+						}
+						
+						
+						
+						var snakesp=Math.round((window.snakes[snake].sp) * (bot.snakeRadius+30)  / 120) + 1;
+						var sncos = Math.cos(window.snakes[snake].ang);
+						var snsin = Math.sin(window.snakes[snake].ang);
+						var snradius=bot.getSnakeWidth(window.snakes[snake].sc) / 2;
+						for (var snp = 1; snp < snakesp; snp++) {
+
+							collisionPoint = {
+								xx: window.snakes[snake].xx + (100+snradius)/10*snp * sncos*2,
+								yy: window.snakes[snake].yy+ (100+snradius)/10*snp * snsin*2,
+								snake: snake,
+								radius: (snradius+10) * (5+snp)/5,
+								isHead: window.snakes[snake].sp
+							};
+
+							if (window.visualDebugging && true) {
+								canvasUtil.drawCircle(canvasUtil.circle(
+										collisionPoint.xx,
+										collisionPoint.yy,
+										collisionPoint.radius),
+									'red', false);
+							}
+							canvasUtil.getDistance2FromSnake(collisionPoint);
+							bot.addCollisionAngle(collisionPoint);
+							fencingAngles[collisionPoint.aIndex]= 1;
+
+						}
+					}
 
 					var snakes_minX = window.snakes[snake].xx;
 					var snakes_maxX = window.snakes[snake].xx;
 					var snakes_minY = window.snakes[snake].yy;
 					var snakes_maxY = window.snakes[snake].yy;
 					
-					
-					
-                    for (var pts = 0, lp = window.snakes[snake].pts.length; pts < lp; pts++) {
-                        if (!window.snakes[snake].pts[pts].dying) {
 						
+					
+                    for (pts = 0, lp = window.snakes[snake].pts.length; pts < lp; pts++) {
+                        if (!window.snakes[snake].pts[pts].dying){
+/*						&&
+                            canvasUtil.pointInRect({
+                                x: window.snakes[snake].pts[pts].xx,
+                                y: window.snakes[snake].pts[pts].yy
+                            }, bot.sectorBox)) {
+						
+
+*/						
+
 							if (window.snakes[snake].pts[pts].xx < snakes_minX) snakes_minX = window.snakes[snake].pts[pts].xx;
 							if (window.snakes[snake].pts[pts].xx > snakes_maxX) snakes_maxX = window.snakes[snake].pts[pts].xx;
 							if (window.snakes[snake].pts[pts].yy < snakes_minY) snakes_minY = window.snakes[snake].pts[pts].yy;
 							if (window.snakes[snake].pts[pts].yy > snakes_maxY) snakes_maxY = window.snakes[snake].pts[pts].yy;
-						
-							var collisionPoint = {
+
+							collisionPoint = {
                                 xx: window.snakes[snake].pts[pts].xx,
                                 yy: window.snakes[snake].pts[pts].yy,
                                 snake: snake,
                                 radius: bot.getSnakeWidth(window.snakes[snake].sc) / 2,
 								isHead: 0
                             };
-
-                            if (window.visualDebugging && true === false) {
+/*
+                            if (window.visualDebugging && true) {
                                 canvasUtil.drawCircle(canvasUtil.circle(
                                         collisionPoint.xx,
                                         collisionPoint.yy,
                                         collisionPoint.radius),
                                     '#00FF00', false);
                             }
-
+*/							
                             canvasUtil.getDistance2FromSnake(collisionPoint);
                             bot.addCollisionAngle(collisionPoint);
+							fencingAngles[collisionPoint.aIndex]= 1;
 
                             if (scPoint === undefined ||
                                 scPoint.distance > collisionPoint.distance) {
@@ -704,34 +774,31 @@ var bot = window.bot = (function() {
                             }
                         }
                     }
+					var fencingAngleslength=0;
 					
-					if (snakes_minX < snake_minX && snakes_maxX > snake_maxX && snakes_maxY > snake_maxY && snakes_minY < snake_minY)
+					for (i = 0; i < ((2 * Math.PI) / bot.arcSize); i++) {
+									if (fencingAngles[i] !== undefined) {
+										fencingAngleslength++;
+									}
+					}					
+					
+					if (fencingAngleslength > (2 * Math.PI / bot.arcSize) * 0.42 && (snakes_minX < snake_minX && snakes_maxX > snake_maxX && snakes_maxY > snake_maxY && snakes_minY < snake_minY))
 					{
-						bot.fencingSnake=true;
-						bot.isCollision=true;						
-                    for (var pts = 0, lp = window.snakes[snake].pts.length; pts < lp; pts++) {
-                        if (!window.snakes[snake].pts[pts].dying) {
-						
-						
-							var collisionPoint = {
-                                xx: window.snakes[snake].pts[pts].xx,
-                                yy: window.snakes[snake].pts[pts].yy,
-                                snake: snake,
-								distance: Math.pow(bot.fullHeadCircleRadius/1.5, 2),
-                                radius: bot.getSnakeWidth(window.snakes[snake].sc) / 2,
-								isHead: 0
-                            };
-
-
-                            bot.addCollisionAngle(collisionPoint);
-
-                        }
-                    }
-
+						if (fencingAngleslength !== (2 * Math.PI / bot.arcSize))
+						{
+							bot.fencingSnake = true;
+							for (i = 0; i < ((2 * Math.PI) / bot.arcSize); i++) {
+											if (fencingAngles[i] !== undefined) {										
+												bot.collisionAngles[i].distance=Math.min(fullHeadCircleRadius2-1,bot.collisionAngles[i].distance);
+											}
+							}
+						}
 					}
+					
+					
                 }
+/*				
                 if (scPoint !== undefined) {
-                    //bot.collisionPoints.push(scPoint);
                     if (window.visualDebugging  && false) {
                         canvasUtil.drawCircle(canvasUtil.circle(
                             scPoint.xx,
@@ -740,52 +807,61 @@ var bot = window.bot = (function() {
                         ), 'red', false);
                     }
                 }
+*/
             }
 
             // WALL
             if (canvasUtil.getDistance2(bot.MID_X, bot.MID_Y, window.snake.xx, window.snake.yy) >
-                Math.pow(bot.MAP_R - 1000, 2)) {
+                Math.pow(bot.MAP_R - 2000, 2)) {
                 var midAng = canvasUtil.fastAtan2(
                     window.snake.yy - bot.MID_X, window.snake.xx - bot.MID_Y);
-                scPoint = {
-                    xx: bot.MID_X + bot.MAP_R * Math.cos(midAng),
-                    yy: bot.MID_Y + bot.MAP_R * Math.sin(midAng),
-                    snake: -1,
-                    radius: bot.snakeWidth,
-                    isHead: 0
-                };
-                canvasUtil.getDistance2FromSnake(scPoint);
-                //bot.collisionPoints.push(scPoint);
-                bot.addCollisionAngle(scPoint);
-                if (window.visualDebugging) {
-                    canvasUtil.drawCircle(canvasUtil.circle(
-                        scPoint.xx,
-                        scPoint.yy,
-                        scPoint.radius
-                    ), 'yellow', false);
-                }
+					
+				for (i = -6; i < 7; i++) {
+					
+					scPoint = {
+						xx: bot.MID_X + bot.MAP_R * Math.cos(midAng + i * 0.01),
+						yy: bot.MID_Y + bot.MAP_R * Math.sin(midAng + i * 0.01),
+						snake: -1,
+						radius: bot.snakeWidth,
+						isHead: 0
+					};
+					
+					canvasUtil.getDistance2FromSnake(scPoint);
+					bot.addCollisionAngle(scPoint);
+					
+					if (window.visualDebugging) {
+						canvasUtil.drawCircle(canvasUtil.circle(
+							scPoint.xx,
+							scPoint.yy,
+							scPoint.radius
+						), 'yellow', false);
+					}
+				}
+				
             }
 
 			var midCollisionAngle_x=window.snake.xx;
 			var midCollisionAngle_y=window.snake.yy;
-//            bot.collisionPoints.sort(bot.sortDistance);
 
 			var sang = window.snake.ehang;
+			var isang = bot.getAngleIndex(sang);
+			var minHeadDist2 = Math.pow(bot.headCircleRadius, 2);
+			var frontArcRadius2 = Math.pow(bot.frontArcRadius, 2);
+			var headCircleRadius22 = Math.pow(bot.headCircleRadius * 2, 2);
 
-			for (var i = 0; i < bot.collisionAngles.length; i++) {
+			for (i = 0; i < ((2 * Math.PI) / bot.arcSize); i++) {
 
 
 				if (bot.collisionAngles[i] !== undefined) {
-					if (bot.collisionAngles[i].distance < Math.pow(bot.fullHeadCircleRadius, 2)) {
+					if (bot.collisionAngles[i].distance < fullHeadCircleRadius2) {
 
-						var minHeadDist = Math.pow(bot.headCircleRadius, 2);
+						
 
-						var frontHeadDist = 0;
-						var angDiff=Math.abs(sang - bot.collisionAngles[i].ang);
-						if (angDiff > Math.PI) angDiff = Math.PI * 2 - angDiff;
-						if (angDiff <= bot.frontArcAngle/2) frontHeadDist = Math.pow(bot.frontArcRadius, 2);
-						if (bot.collisionAngles[i].distance < frontHeadDist) bot.frontCollision = true;
-						if (bot.collisionAngles[i].distance < minHeadDist || (bot.collisionAngles[i].distance < frontHeadDist) || (bot.collisionAngles[i].distance < minHeadDist * 2 && bot.collisionAngles[i].isHead > 8)) {
+						var frontHeadDist2 = 0;
+						var iDiff=Math.abs(bot.indexBetween(isang, i));
+						
+							
+						if (bot.collisionAngles[i].distance < minHeadDist2 || bot.collisionAngles[i].isHead > 0 && iDiff < ( Math.PI / bot.arcSize / 2 ) && (bot.collisionAngles[i].distance < headCircleRadius22 )) {
 
 							bot.isCollision = true;
 							bot.isHeadCollision = (bot.collisionAngles[i].isHead > 0);
@@ -795,8 +871,8 @@ var bot = window.bot = (function() {
 												x: window.snake.xx,
 												y: window.snake.yy
 											}, {
-												x: bot.collisionAngles[i].x,
-												y: bot.collisionAngles[i].y
+												x: window.snake.xx + Math.sqrt(bot.collisionAngles[i].distance) * Math.cos(bot.collisionAngles[i].ang),
+												y: window.snake.yy + Math.sqrt(bot.collisionAngles[i].distance) * Math.sin(bot.collisionAngles[i].ang)
 											},
 										'yellow', 2);
 									}
@@ -805,8 +881,8 @@ var bot = window.bot = (function() {
 												x: window.snake.xx,
 												y: window.snake.yy
 											}, {
-												x: bot.collisionAngles[i].x,
-												y: bot.collisionAngles[i].y
+												x: window.snake.xx + Math.sqrt(bot.collisionAngles[i].distance) * Math.cos(bot.collisionAngles[i].ang),
+												y: window.snake.yy + Math.sqrt(bot.collisionAngles[i].distance) * Math.sin(bot.collisionAngles[i].ang)
 											},
 										'red', 2);
 									}
@@ -814,17 +890,29 @@ var bot = window.bot = (function() {
 						}
 						else {
 							if (window.visualDebugging ) {
-								canvasUtil.drawLine({
-										x: window.snake.xx,
-										y: window.snake.yy
-									}, {
-										x: bot.collisionAngles[i].x,
-										y: bot.collisionAngles[i].y
-									},
-								'white', 0.5);
+								if (bot.fencingSnake) {
+									canvasUtil.drawLine({
+											x: window.snake.xx,
+											y: window.snake.yy
+										}, {
+											x: window.snake.xx + Math.sqrt(bot.collisionAngles[i].distance) * Math.cos(bot.collisionAngles[i].ang),
+											y: window.snake.yy + Math.sqrt(bot.collisionAngles[i].distance) * Math.sin(bot.collisionAngles[i].ang)
+										},
+									'red', 2);								
+								}
+								else {
+									canvasUtil.drawLine({
+											x: window.snake.xx,
+											y: window.snake.yy
+										}, {
+											x: window.snake.xx + Math.sqrt(bot.collisionAngles[i].distance) * Math.cos(bot.collisionAngles[i].ang),
+											y: window.snake.yy + Math.sqrt(bot.collisionAngles[i].distance) * Math.sin(bot.collisionAngles[i].ang)
+										},
+									'white', 0.5);
+								}
 							}
 						}
-						var angleScore = bot.fullHeadCircleRadius / bot.collisionAngles[i].distance;
+						var angleScore = fullHeadCircleRadius2 / bot.collisionAngles[i].distance;
 						midCollisionAngle_x += Math.cos(bot.collisionAngles[i].ang) * angleScore;
 						midCollisionAngle_y += Math.sin(bot.collisionAngles[i].ang) * angleScore;
 
@@ -833,64 +921,92 @@ var bot = window.bot = (function() {
 
 				
 			}
-			if (midCollisionAngle_x == window.snake.xx && midCollisionAngle_y == window.snake.yy)
+			
+			if (midCollisionAngle_x === window.snake.xx && midCollisionAngle_y === window.snake.yy)
 			{
                 var midlAng = canvasUtil.fastAtan2(
-                    window.snake.yy - bot.MID_X, window.snake.xx - bot.MID_Y);
-
-				midCollisionAngle_x= bot.MID_X + bot.MAP_R * Math.cos(midlAng);
-                midCollisionAngle_y= bot.MID_Y + bot.MAP_R * Math.sin(midlAng);
+                    bot.MID_Y-window.snake.yy , bot.MID_X-window.snake.xx);
+					
+				
+				if ((Math.pow(window.snake.yy - bot.MID_Y,2) + Math.pow(window.snake.xx - bot.MID_X,2)) < Math.pow(bot.snakeRadius * bot.MAP_R/200,2)) {
+					midlAng = midlAng + Math.PI / 2;
+				}
+				var diffA = bot.angleBetween(bot.gotoAngle,midlAng);
+				
+				if (Math.abs(diffA)>0.5)
+				{
+					if (diffA>0) 
+						bot.gotoAngle=bot.gotoAngle+0.02;
+					else
+						bot.gotoAngle=bot.gotoAngle-0.02;
+					
+					
+				}
+				else
+				bot.gotoAngle = midlAng;
 			}
-			bot.gotoAngle = canvasUtil.fastAtan2(window.snake.yy - midCollisionAngle_y, window.snake.xx - midCollisionAngle_x);
+			else
+				bot.gotoAngle = canvasUtil.fastAtan2(window.snake.yy - midCollisionAngle_y, window.snake.xx - midCollisionAngle_x);
         },
 
         // Checks to see if you are going to collide with anything in the collision detection radius
         checkCollision: function() {
-			bot.headCircleRadius = bot.opt.radiusMult * bot.snakeRadius / 2;
-            var headCircle = canvasUtil.circle(
-                window.snake.xx,
-				window.snake.yy,
-                bot.headCircleRadius
-            );
 
-			bot.frontArcAngle = Math.PI / bot.speedMult / 2.5;
-			bot.frontArcRadius = bot.headCircleRadius * bot.speedMult * 1.5;
-//(start, angle, radius, color, fill, alpha)
-			var sang = window.snake.ehang;
-			bot.fullHeadCircleRadius = bot.opt.radiusMult * bot.snakeRadius * 3;
-            var fullHeadCircle = canvasUtil.circle(
-                window.snake.xx, window.snake.yy,
-                bot.fullHeadCircleRadius
-            );
+			bot.headCircleRadius = bot.opt.radiusMult * (20+bot.snakeRadius) / 3;
+			bot.frontArcAngle = bot.arcSize;
+			bot.frontArcRadius = bot.opt.radiusMult * bot.speedMult * 15 ;
+			bot.fullHeadCircleRadius = bot.opt.radiusMult * bot.snakeRadius * 2;
+
+			
 			bot.isCollision = false;
 			bot.fencingSnake = false;
-			bot.frontCollision = false;
 			bot.isHeadCollision = false;
-            bot.getCollisionPoints();
-
+            
+			
+			var startTime = (new Date()).getTime();
+			bot.getCollision();
+			var endTime = (new Date()).getTime();
+			bot.checktime=(endTime - startTime);
+			
+			var sang = window.snake.ehang;
+			
             if (window.visualDebugging) {
+				var headCircle = canvasUtil.circle(
+					window.snake.xx,
+					window.snake.yy,
+					bot.headCircleRadius
+				);
+			
 				if (bot.isCollision) {
 					canvasUtil.drawCircle(headCircle, 'red', false);
 				}
 				else {
 					canvasUtil.drawCircle(headCircle, 'blue', false);
 				}
-				if (bot.frontCollision) {
-					canvasUtil.drawAngle(sang-bot.frontArcAngle/2, sang+bot.frontArcAngle/2, bot.frontArcRadius, 'red', false);
+				
+//					canvasUtil.drawAngle(sang-bot.frontArcAngle/2, sang+bot.frontArcAngle/2, bot.headCircleRadius * 2, 'white', false);
+				
+				var fullHeadCircle = canvasUtil.circle(
+					window.snake.xx, window.snake.yy,
+					bot.fullHeadCircleRadius
+				);
+				
+				if (bot.fencingSnake) {
+				canvasUtil.drawCircle(fullHeadCircle, 'red', false);
 				}
 				else {
-					canvasUtil.drawAngle(sang-bot.frontArcAngle/2, sang+bot.frontArcAngle/2, bot.frontArcRadius, 'blue', false);
-				}
 				canvasUtil.drawCircle(fullHeadCircle, 'gray', false);
+				}
             }
             if (bot.isCollision || bot.fencingSnake) {
 				
-				var aIndex = bot.getAngleIndex(window.snake.ehang);
+				var tAccel = bot.defaultAccel;
+
+				if ((bot.isHeadCollision|| bot.fencingSnake))
+					tAccel = bot.calcAcceleration(bot.gotoAngle);
+				bot.targetAcceleration = tAccel;
+				window.setAcceleration(tAccel);	
 				
-				if ((bot.isHeadCollision|| bot.fencingSnake) && !bot.frontCollision && (bot.collisionAngles[aIndex] === undefined || bot.collisionAngles[aIndex].distance > Math.pow(bot.fullHeadCircleRadius/2, 2)))
-					window.setAcceleration(1);
-				else
-					window.setAcceleration(bot.defaultAccel);
 				bot.avoidCollision();
                 return true;
 			}
@@ -909,103 +1025,127 @@ var bot = window.bot = (function() {
         },
 
         computeFoodGoal: function() {
-            var foodClusters = [];
-            var foodGetIndex = [];
-            var fi = 0;
-            var sw = bot.snakeWidth;
+            
+			var foodAngles = [];
+			var foodWeights = [];
+			
+			var sx = window.snake.xx;
+			var sy = window.snake.yy;
+			var headCircleRadius2 = Math.pow(bot.headCircleRadius, 2);
+			var fullHeadCircleRadius22 = Math.pow(bot.fullHeadCircleRadius * 2, 2);
+
 
             for (var i = 0; i < window.foods.length && window.foods[i] !== null; i++) {
                 var a;
                 var da;
                 var gotoda;
-                var distance;
+				var f = window.foods[i];
+				var cx = f.xx;
+				var cy = f.yy;
+				var distance = canvasUtil.getDistance2(cx, cy, sx, sy);
                 var sang = window.snake.ehang;
-                var f = window.foods[i];
+                var csz = f.sz;
+					
+				
+				
+                if (!f.eaten && (distance < fullHeadCircleRadius22 || csz > 10) ) {
+							
+							
+							
 
-                if (!f.eaten &&
-                    !(
-                        canvasUtil.circleIntersect(
-                            canvasUtil.circle(f.xx, f.yy, 2),
-                            bot.sidecircle_l, true) ||
-                        canvasUtil.circleIntersect(
-                            canvasUtil.circle(f.xx, f.yy, 2),
-                            bot.sidecircle_r, true))) {
+                    
+					
+					a = canvasUtil.fastAtan2(cy - sy, cx - sx);
+					var aIndex = bot.getAngleIndex(a);
+                    da = Math.min((2 * Math.PI) - Math.abs(a - sang), Math.abs(a - sang));
+                    gotoda = Math.min((2 * Math.PI) - Math.abs(a - bot.gotoAngle), Math.abs(a - bot.gotoAngle));	
+					
+					if (bot.collisionAngles[aIndex] === undefined || distance < bot.collisionAngles[aIndex].distance - headCircleRadius2 / 6)
+					{
+						if (foodAngles[aIndex] === undefined) {
+							foodWeights[aIndex] = csz;
+							foodAngles[aIndex] = 10 * csz / (Math.abs(Math.sqrt(distance ))+100) ;
+						}
+						else {
+							foodAngles[aIndex] += 10 * csz / (Math.abs(Math.sqrt(distance ))+100) ;
+							foodWeights[aIndex] += csz;
+						}
+					}
 
-                    var cx = Math.round(Math.round(f.xx / sw) * sw);
-                    var cy = Math.round(Math.round(f.yy / sw) * sw);
-                    var csz = Math.round(f.sz);
-
-                    if (foodGetIndex[cx + '|' + cy] === undefined) {
-                        foodGetIndex[cx + '|' + cy] = fi;
-                        a = canvasUtil.fastAtan2(cy - window.snake.yy, cx - window.snake.xx);
-                        da = Math.min(
-                            (2 * Math.PI) - Math.abs(a - sang), Math.abs(a - sang));
-                        gotoda = Math.min(
-                            (2 * Math.PI) - Math.abs(a - bot.gotoAngle), Math.abs(a - bot.gotoAngle)) * 10;
-
-						if (bot.mouseFollow) gotoda = gotoda * 10;
-                        distance = Math.round(
-                            canvasUtil.getDistance2(cx, cy, window.snake.xx, window.snake.yy));
-                        foodClusters[fi] = {
-                            x: cx,
-                            y: cy,
-                            a: a,
-                            da: da,
-							gotoda: gotoda,
-                            sz: csz,
-                            distance: distance,
-                            score: 0.0
-                        };
-                        fi++;
-                    } else {
-                        foodClusters[foodGetIndex[cx + '|' + cy]].sz += csz;
-                    }
                 }
             }
 
-            foodClusters.forEach(bot.scoreFood);
-            foodClusters.sort(bot.sortScore);
+	
+			var foodWeight = 0;
+			var foodAindex = 0;
+			var fw=0;
+			for (i = 0; i < (2 * Math.PI) / bot.arcSize; i++) {
+			
 
-            for (i = 0; i < foodClusters.length; i++) {
-                var aIndex = bot.getAngleIndex(foodClusters[i].a);
-                if (bot.collisionAngles[aIndex] === undefined ||
-                    (Math.sqrt(bot.collisionAngles[aIndex].distance) -
-                        bot.snakeRadius * bot.opt.radiusMult / 2 >
-                        Math.sqrt(foodClusters[i].distance) &&
-                        foodClusters[i].sz > bot.opt.foodSmallSize)
-                ) {
-                    bot.currentFood = foodClusters[i];
-                    return;
-                }
-            }
+				var n1=i-1;
+				var n2=i+1;
+				if (n1===-1) n1=(2 * Math.PI) / bot.arcSize;
+				if (n2===(2 * Math.PI) / bot.arcSize) n2=0;
+				var nw=0;
+				if (foodAngles[n1] !== undefined) nw=foodAngles[n1];
+				if (foodAngles[n1] !== undefined) nw+=foodAngles[n2];
+				
+				if (foodAngles[i] !== undefined) {
+						a = bot.arcSize * i;
+						da = Math.min((2 * Math.PI) - Math.abs(a - sang), Math.abs(a - sang));
+						gotoda = Math.min((2 * Math.PI) - Math.abs(a - bot.gotoAngle), Math.abs(a - bot.gotoAngle));	
+				
+						fw = (foodAngles[i] + nw/2) / ( gotoda + 3);
+						if (fw > foodWeight)
+						{
+							foodWeight=fw;
+							foodAindex = i;
+						}
+					
+				}
+
+				
+			}
+			if (foodWeight === 0)
+			{
+				bot.currentFood = {
+					x: bot.MID_X,
+					y: bot.MID_Y,
+					sz: 0,
+					ang: 0,
+					foodAindex: 0
+				};			
+				return;
+			}
+			var foodAngle = bot.arcSize * foodAindex;
+			
+			
             bot.currentFood = {
-                x: bot.MID_X,
-                y: bot.MID_Y
-            };
+                x: sx + bot.fullHeadCircleRadius * Math.cos(foodAngle),
+                y: sy + bot.fullHeadCircleRadius * Math.sin(foodAngle),
+				sz: foodWeights[foodAindex],
+				ang: foodAngle,
+				aIndex: foodAindex
+            };			
+			return;
+			
         },
 
         foodAccel: function() {
-            var aIndex = 0;
-
-            if (bot.currentFood && bot.currentFood.sz > bot.opt.foodAccelSize) {
-                aIndex = bot.getAngleIndex(bot.currentFood.a);
-
-                if (
-                    bot.collisionAngles[aIndex] && bot.collisionAngles[aIndex].distance >
-                    bot.currentFood.distance + bot.frontArcRadius * 2 &&
-                    bot.currentFood.da < bot.opt.foodAccelAngle && bot.currentFood.distance > bot.foodAccelDist) {
-                    return 1;
-                }
-
-                if (bot.collisionAngles[aIndex] === undefined && bot.currentFood.distance > bot.foodAccelDist) {
-                    return 1;
-                }
+            if (bot.currentFood && bot.currentFood.sz > bot.foodAccelSize) {			
+					var tAccel = bot.calcAcceleration(bot.currentFood.ang);
+					
+					return tAccel;
+				
             }
 
             return bot.defaultAccel;
         },
 
         every: function() {
+		
+
+			
             bot.MID_X = window.grd;
             bot.MID_Y = window.grd;
             bot.MAP_R = window.grd * 0.98;
@@ -1048,15 +1188,23 @@ var bot = window.bot = (function() {
         // Main bot
         go: function() {
             bot.every();
-
             if (bot.checkCollision()) {
                 bot.lookForFood = false;
                 if (bot.foodTimeout) {
                     window.clearTimeout(bot.foodTimeout);
                     bot.foodTimeout = window.setTimeout(
-                        bot.foodTimer, 1000 / bot.opt.targetFps * bot.opt.foodFrames);
+                        bot.foodTimer, 1000 / bot.opt.targetFps * bot.foodFrames * 2);
                 }
             } else {
+			
+				if (bot.predatorMode)
+				{
+					if (bot.isHunting)
+						bot.lookForSnakeDelayCnt = 0;
+					else if (bot.snakeRadius > 15)
+						bot.lookForSnakeDelayCnt++;
+					
+				}
 
 				//if mousefollow on
 				if(bot.mouseFollow){
@@ -1065,10 +1213,43 @@ var bot = window.bot = (function() {
                 bot.lookForFood = !bot.manualFood;
                 if (bot.foodTimeout === undefined) {
                     bot.foodTimeout = window.setTimeout(
-                        bot.foodTimer, 1000 / bot.opt.targetFps * bot.opt.foodFrames);
+                        bot.foodTimer, 1000 / bot.opt.targetFps * bot.foodFrames);
                 }
-				window.setAcceleration(bot.foodAccel());
+				
+				if (bot.manualFood)
+					window.setAcceleration(bot.defaultAccel);				
+				else
+				{
+					var tAccel = bot.foodAccel();
+					window.setAcceleration(bot.foodAccel());
+					bot.targetAcceleration = tAccel;
+				}
+					
+				bot.pingDelay++;
+                if (window.bso !== undefined && bot.pingDelay > 30) {
+				
+					bot.pingDelay=0;
+
+					var startTime = (new Date()).getTime(),
+						endTime;
+
+					new userInterface.ping('ws://'+window.bso.ip + ':' + window.bso.po+'/slither', function (status, e) {
+											endTime = (new Date()).getTime();
+											bot.pingtime=(endTime - startTime);
+											if (bot.pingtime<10) bot.pingtime=' '+bot.pingtime;
+
+
+										});
+					
+				
+
+				}
+					
+
+					
+					
             }
+			
 			if (window.visualDebugging && !bot.manualFood) {
 				canvasUtil.drawLine({
 						x: window.snake.xx,
@@ -1095,7 +1276,10 @@ var bot = window.bot = (function() {
 					},
 					'green');
 			}
-        },
+
+			
+			
+		},
 
         // Timer version of food check
         foodTimer: function() {
@@ -1117,13 +1301,12 @@ var userInterface = window.userInterface = (function() {
     var original_oef = window.oef;
     var original_redraw = window.redraw;
     var original_onmousemove = window.onmousemove;
-
     window.oef = function() {};
     window.redraw = function() {};
 
     return {
         overlays: {},
-
+		
         initOverlays: function() {
             var botOverlay = document.createElement('div');
             botOverlay.style.position = 'fixed';
@@ -1299,6 +1482,10 @@ var userInterface = window.userInterface = (function() {
                 if (e.keyCode === 78) {
                     bot.mouseFollow = !bot.mouseFollow;
                 }
+				 // Letter `P` to togle predator on/off
+                if (e.keyCode === 80) {
+                    bot.predatorMode = !bot.predatorMode;
+                }
                 // Letter `T` to toggle bot
                 if (e.keyCode === 84) {
                     bot.isBotEnabled = !bot.isBotEnabled;
@@ -1333,7 +1520,7 @@ var userInterface = window.userInterface = (function() {
                 if (e.keyCode === 66) {
                     var url = null;
 					var actbackground=window.ii.src.split('/').pop();
-					if (actbackground == 'black' || actbackground==='')
+					if (actbackground === 'black' || actbackground ==='')
 						url = prompt('Please enter a background url or let it empty to set default:');
 					else
 						url = prompt('Please enter a background url or let it empty for black background:');
@@ -1470,7 +1657,37 @@ var userInterface = window.userInterface = (function() {
 
             userInterface.overlays.statsOverlay.innerHTML = oContent.join('<br/>');
         },
+	 ping: function(ip, callback) {
 
+		if (!this.inUse) {
+			this.status = 'unchecked';
+			this.inUse = true;
+			this.callback = callback;
+			this.ip = ip;
+			var _that = this;
+			this.img = new Image();
+			this.img.onload = function () {
+				_that.inUse = false;
+				_that.callback('responded');
+
+			};
+			this.img.onerror = function (e) {
+				if (_that.inUse) {
+					_that.inUse = false;
+					_that.callback('respondederr', e);
+				}
+
+			};
+			this.start = new Date().getTime();
+			this.img.src =  ip;
+			this.timer = setTimeout(function () {
+				if (_that.inUse) {
+					_that.inUse = false;
+					_that.callback('timeout');
+				}
+			}, 1500);
+		}
+	},
         onPrefChange: function() {
             // Set static display options here.
             var oContent = [];
@@ -1480,6 +1697,7 @@ var userInterface = window.userInterface = (function() {
             oContent.push('[T / Right click] bot: ' + ht(bot.isBotEnabled));
             oContent.push('[O] mobile rendering: ' + ht(window.mobileRender));
             oContent.push('[A/S] radius multiplier: ' + bot.opt.radiusMult);
+//			oContent.push('[P] predator: ' + ht(bot.predatorMode));
 			oContent.push('[N] mouse follow: ' + ht(bot.mouseFollow));
 			oContent.push('[M] manually feed: ' + ht(bot.manualFood));
             oContent.push('[D] quick radius change ' +bot.opt.radiusApproachSize + '/' + bot.opt.radiusAvoidSize);
@@ -1489,7 +1707,6 @@ var userInterface = window.userInterface = (function() {
             oContent.push('[H] overlays');
             oContent.push('[B] change background');
             oContent.push('[Mouse Wheel] zoom');
-            oContent.push('[ESC] quick respawn');
             oContent.push('[Q] quit to menu');
             userInterface.overlays.prefOverlay.innerHTML = oContent.join('<br/>');
         },
@@ -1499,26 +1716,33 @@ var userInterface = window.userInterface = (function() {
             var oContent = [];
 
             if (window.playing && window.snake !== null) {
-                oContent.push('fps: ' + userInterface.framesPerSecond.fps);
+			
 
+				oContent.push('fps: ' + userInterface.framesPerSecond.fps+' ping: '+bot.pingtime+'ms');
                 // Display the X and Y of the snake
                 oContent.push('x: ' +
                     (Math.round(window.snake.xx) || 0) + ' y: ' +
                     (Math.round(window.snake.yy) || 0));
 
                 if (window.goalCoordinates) {
-                    oContent.push('target');
-                    oContent.push('x: ' + window.goalCoordinates.x + ' y: ' +
-                        window.goalCoordinates.y);
                     if (window.goalCoordinates.sz) {
-                        oContent.push('sz: ' + window.goalCoordinates.sz);
+                        oContent.push('target sz: ' + Math.round(window.goalCoordinates.sz));
                     }
+                    else
+						oContent.push('target');
+                    oContent.push('x: ' + Math.round(window.goalCoordinates.x) + ' y: ' +
+                        Math.round(window.goalCoordinates.y));
                 }
-
+                    oContent.push('check: ' + bot.checktime+'ms');
+				
                 if (window.bso !== undefined && userInterface.overlays.serverOverlay.innerHTML !==
                     window.bso.ip + ':' + window.bso.po) {
+
                     userInterface.overlays.serverOverlay.innerHTML =
                         window.bso.ip + ':' + window.bso.po;
+
+
+						
                 }
             }
 
@@ -1572,10 +1796,6 @@ var userInterface = window.userInterface = (function() {
 
                 if (window.autoRespawn) {
                     bot.startTime = Date.now();
-					var srv = inpIP.value.trim().split(":");
-					console.log("srv[0]"+srv[0]);
-					window.bso.ip = srv[0];
-					window.bso.po = srv[1];
 					window.connect();
                 }
             }
