@@ -519,9 +519,8 @@ var bot = window.bot = (function() {
         avoidCollision: function() {
 
 				
-				if (bot.targetAcceleration !== 1 && bot.speedMult > 1.8 ) 
+				if (bot.targetAcceleration !== 1 && bot.speedMult > 1.8 && !bot.frontCollision) 
 				{
-//									console.log("bot.speedMult "+bot.speedMult );
 					return; 
 				}
 
@@ -849,24 +848,54 @@ var bot = window.bot = (function() {
 			var frontArcRadius2 = Math.pow(bot.frontArcRadius, 2);
 			var headCircleRadius22 = Math.pow(bot.headCircleRadius * 2, 2);
 
-			for (i = 0; i < ((2 * Math.PI) / bot.arcSize); i++) {
+			if (bot.collisionAngles[isang] !== undefined && (bot.collisionAngles[isang].distance < frontArcRadius2)) {
+				bot.frontCollision = true;	
+				console.log("front colli");
+				bot.isCollision = true;
+			}
+			else {				
+				for (i = 0; i < ((2 * Math.PI) / bot.arcSize); i++) {
 
 
-				if (bot.collisionAngles[i] !== undefined) {
-					if (bot.collisionAngles[i].distance < fullHeadCircleRadius2) {
+					if (bot.collisionAngles[i] !== undefined) {
+						if (bot.collisionAngles[i].distance < fullHeadCircleRadius2) {
 
-						
-
-						var frontHeadDist2 = 0;
-						var iDiff=Math.abs(bot.indexBetween(isang, i));
-						
 							
-						if (bot.collisionAngles[i].distance < minHeadDist2 || bot.collisionAngles[i].isHead > 0 && iDiff < ( Math.PI / bot.arcSize / 2 ) && (bot.collisionAngles[i].distance < headCircleRadius22 )) {
 
-							bot.isCollision = true;
-							bot.isHeadCollision = (bot.collisionAngles[i].isHead > 0);
-							if (window.visualDebugging ) {
-									if (bot.isHeadCollision) {
+							var frontHeadDist2 = 0;
+							var iDiff=Math.abs(bot.indexBetween(isang, i));
+							
+
+							if (bot.collisionAngles[i].distance < minHeadDist2 || bot.collisionAngles[i].isHead > 0 && iDiff < ( Math.PI / bot.arcSize / 2 ) && (bot.collisionAngles[i].distance < headCircleRadius22 )) {
+
+								bot.isCollision = true;
+								bot.isHeadCollision = (bot.collisionAngles[i].isHead > 0);
+								if (window.visualDebugging ) {
+										if (bot.isHeadCollision) {
+											canvasUtil.drawLine({
+													x: window.snake.xx,
+													y: window.snake.yy
+												}, {
+													x: window.snake.xx + Math.sqrt(bot.collisionAngles[i].distance) * Math.cos(bot.collisionAngles[i].ang),
+													y: window.snake.yy + Math.sqrt(bot.collisionAngles[i].distance) * Math.sin(bot.collisionAngles[i].ang)
+												},
+											'yellow', 2);
+										}
+										else {
+											canvasUtil.drawLine({
+													x: window.snake.xx,
+													y: window.snake.yy
+												}, {
+													x: window.snake.xx + Math.sqrt(bot.collisionAngles[i].distance) * Math.cos(bot.collisionAngles[i].ang),
+													y: window.snake.yy + Math.sqrt(bot.collisionAngles[i].distance) * Math.sin(bot.collisionAngles[i].ang)
+												},
+											'red', 2);
+										}
+								}
+							}
+							else {
+								if (window.visualDebugging ) {
+									if (bot.fencingSnake) {
 										canvasUtil.drawLine({
 												x: window.snake.xx,
 												y: window.snake.yy
@@ -874,7 +903,7 @@ var bot = window.bot = (function() {
 												x: window.snake.xx + Math.sqrt(bot.collisionAngles[i].distance) * Math.cos(bot.collisionAngles[i].ang),
 												y: window.snake.yy + Math.sqrt(bot.collisionAngles[i].distance) * Math.sin(bot.collisionAngles[i].ang)
 											},
-										'yellow', 2);
+										'red', 2);								
 									}
 									else {
 										canvasUtil.drawLine({
@@ -884,51 +913,27 @@ var bot = window.bot = (function() {
 												x: window.snake.xx + Math.sqrt(bot.collisionAngles[i].distance) * Math.cos(bot.collisionAngles[i].ang),
 												y: window.snake.yy + Math.sqrt(bot.collisionAngles[i].distance) * Math.sin(bot.collisionAngles[i].ang)
 											},
-										'red', 2);
+										'white', 0.5);
 									}
-							}
-						}
-						else {
-							if (window.visualDebugging ) {
-								if (bot.fencingSnake) {
-									canvasUtil.drawLine({
-											x: window.snake.xx,
-											y: window.snake.yy
-										}, {
-											x: window.snake.xx + Math.sqrt(bot.collisionAngles[i].distance) * Math.cos(bot.collisionAngles[i].ang),
-											y: window.snake.yy + Math.sqrt(bot.collisionAngles[i].distance) * Math.sin(bot.collisionAngles[i].ang)
-										},
-									'red', 2);								
-								}
-								else {
-									canvasUtil.drawLine({
-											x: window.snake.xx,
-											y: window.snake.yy
-										}, {
-											x: window.snake.xx + Math.sqrt(bot.collisionAngles[i].distance) * Math.cos(bot.collisionAngles[i].ang),
-											y: window.snake.yy + Math.sqrt(bot.collisionAngles[i].distance) * Math.sin(bot.collisionAngles[i].ang)
-										},
-									'white', 0.5);
 								}
 							}
-						}
-						var angleScore = fullHeadCircleRadius2 / bot.collisionAngles[i].distance;
-						midCollisionAngle_x += Math.cos(bot.collisionAngles[i].ang) * angleScore;
-						midCollisionAngle_y += Math.sin(bot.collisionAngles[i].ang) * angleScore;
+							var angleScore = fullHeadCircleRadius2 / bot.collisionAngles[i].distance;
+							midCollisionAngle_x += Math.cos(bot.collisionAngles[i].ang) * angleScore;
+							midCollisionAngle_y += Math.sin(bot.collisionAngles[i].ang) * angleScore;
 
+						}
 					}
-				}
 
-				
-			}
-			
-			if (midCollisionAngle_x === window.snake.xx && midCollisionAngle_y === window.snake.yy)
+					
+				}
+			}	
+				if (midCollisionAngle_x === window.snake.xx && midCollisionAngle_y === window.snake.yy)
 			{
                 var midlAng = canvasUtil.fastAtan2(
                     bot.MID_Y-window.snake.yy , bot.MID_X-window.snake.xx);
 					
 				
-				if ((Math.pow(window.snake.yy - bot.MID_Y,2) + Math.pow(window.snake.xx - bot.MID_X,2)) < Math.pow(bot.snakeRadius * bot.MAP_R/200,2)) {
+				if ((Math.pow(window.snake.yy - bot.MID_Y,2) + Math.pow(window.snake.xx - bot.MID_X,2)) < Math.pow(bot.snakeRadius * bot.MAP_R/60,2)) {
 					midlAng = midlAng + Math.PI / 2;
 				}
 				
@@ -953,15 +958,16 @@ var bot = window.bot = (function() {
         // Checks to see if you are going to collide with anything in the collision detection radius
         checkCollision: function() {
 
-			bot.headCircleRadius = bot.opt.radiusMult * (20+bot.snakeRadius) / 2.5;
+			bot.headCircleRadius = bot.opt.radiusMult * (10+bot.snakeRadius) / 2.5;
 			bot.frontArcAngle = bot.arcSize;
-			bot.frontArcRadius = bot.opt.radiusMult * bot.speedMult * 15 ;
-			bot.fullHeadCircleRadius = bot.opt.radiusMult * bot.snakeRadius * 2.5;
+			bot.frontArcRadius = bot.speedMult * bot.headCircleRadius ;
+			bot.fullHeadCircleRadius = bot.headCircleRadius * 3;
 
 			
 			bot.isCollision = false;
 			bot.fencingSnake = false;
 			bot.isHeadCollision = false;
+			bot.frontCollision = false;
             
 			
 			var startTime = (new Date()).getTime();
@@ -984,8 +990,13 @@ var bot = window.bot = (function() {
 				else {
 					canvasUtil.drawCircle(headCircle, 'blue', false);
 				}
+				if (bot.frontCollision) {
+					canvasUtil.drawAngle(sang-bot.frontArcAngle/2, sang+bot.frontArcAngle/2, bot.frontArcRadius, 'red', true);
+				}
+				else {
+					canvasUtil.drawAngle(sang-bot.frontArcAngle/2, sang+bot.frontArcAngle/2, bot.frontArcRadius, 'white', false);
+				}
 				
-//					canvasUtil.drawAngle(sang-bot.frontArcAngle/2, sang+bot.frontArcAngle/2, bot.headCircleRadius * 2, 'white', false);
 				
 				var fullHeadCircle = canvasUtil.circle(
 					window.snake.xx, window.snake.yy,
@@ -1093,10 +1104,10 @@ var bot = window.bot = (function() {
 				
 				if (foodAngles[i] !== undefined) {
 						a = bot.arcSize * i;
-						da = Math.min((2 * Math.PI) - Math.abs(a - sang), Math.abs(a - sang));
-						gotoda = Math.min((2 * Math.PI) - Math.abs(a - bot.gotoAngle), Math.abs(a - bot.gotoAngle));	
+						//da = Math.min((2 * Math.PI) - Math.abs(a - sang), Math.abs(a - sang));
+						gotoda = Math.abs(bot.indexBetween(i, bot.getAngleIndex(bot.gotoAngle)));	
 				
-						fw = (foodAngles[i] + nw/2) / ( gotoda + 3);
+						fw = (foodAngles[i] + nw/2) / ( gotoda + 10) / 5;
 						if (fw > foodWeight)
 						{
 							foodWeight=fw;
