@@ -519,7 +519,7 @@ var bot = window.bot = (function() {
         avoidCollision: function() {
 
 				
-				if (bot.targetAcceleration !== 1 && bot.speedMult > 1.6 ) 
+				if (bot.targetAcceleration !== 1 && bot.speedMult > 1.8 ) 
 				{
 //									console.log("bot.speedMult "+bot.speedMult );
 					return; 
@@ -931,9 +931,10 @@ var bot = window.bot = (function() {
 				if ((Math.pow(window.snake.yy - bot.MID_Y,2) + Math.pow(window.snake.xx - bot.MID_X,2)) < Math.pow(bot.snakeRadius * bot.MAP_R/200,2)) {
 					midlAng = midlAng + Math.PI / 2;
 				}
-				var diffA = bot.angleBetween(bot.gotoAngle,midlAng);
 				
-				if (Math.abs(diffA)>0.5)
+				var diffA = bot.indexBetween(bot.getAngleIndex(bot.gotoAngle),bot.getAngleIndex(midlAng));
+				
+				if (Math.abs(diffA)>2)
 				{
 					if (diffA>0) 
 						bot.gotoAngle=bot.gotoAngle+0.02;
@@ -943,7 +944,7 @@ var bot = window.bot = (function() {
 					
 				}
 				else
-				bot.gotoAngle = midlAng;
+					bot.gotoAngle = midlAng;
 			}
 			else
 				bot.gotoAngle = canvasUtil.fastAtan2(window.snake.yy - midCollisionAngle_y, window.snake.xx - midCollisionAngle_x);
@@ -952,10 +953,10 @@ var bot = window.bot = (function() {
         // Checks to see if you are going to collide with anything in the collision detection radius
         checkCollision: function() {
 
-			bot.headCircleRadius = bot.opt.radiusMult * (20+bot.snakeRadius) / 3;
+			bot.headCircleRadius = bot.opt.radiusMult * (20+bot.snakeRadius) / 2.5;
 			bot.frontArcAngle = bot.arcSize;
 			bot.frontArcRadius = bot.opt.radiusMult * bot.speedMult * 15 ;
-			bot.fullHeadCircleRadius = bot.opt.radiusMult * bot.snakeRadius * 2;
+			bot.fullHeadCircleRadius = bot.opt.radiusMult * bot.snakeRadius * 2.5;
 
 			
 			bot.isCollision = false;
