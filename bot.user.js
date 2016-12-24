@@ -1634,7 +1634,7 @@ var bot = window.bot = (function (window) {
 			{
 				//expandDelta=bot.opt.expandNormal  * (bot.enemyBodyOffsetCnt+bot.opt.enemyBodyOffsetDelay/20)/bot.opt.enemyBodyOffsetDelay;
 				bot.enemyBodyOffsetCnt++;
-				expandDelta=0.05;
+				expandDelta=0.02;
 			}
 			
 			if (bot.opt.enemyBodyOffsetThd>enemyBodyOffsetDelta)
