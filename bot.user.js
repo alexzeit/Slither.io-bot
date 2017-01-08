@@ -457,7 +457,7 @@ var bot = window.bot = (function (window) {
 			expandNormal:0.2,
 			enemyBodyOffsetThd: 5,
 			
-			avoidAngleStep: Math.PI / 4,
+			avoidAngleStep: Math.PI / 8,
 			
             // radius multiple for circle intersects
             radiusMult: 10,
@@ -719,24 +719,43 @@ var bot = window.bot = (function (window) {
 			if (bot.lastAvoidAng==1000 || (Math.abs(bot.angleBetween(bot.lastAvoidAng, point.ang)) > bot.opt.avoidAngleStep))	
 			{
 				bot.lastAvoidAng=point.ang;
-				//if ((bot.leftCollision==1000000000 && bot.rightCollision==1000000000)||(bot.leftCollision<1000000000 && bot.rightCollision<1000000000))
-				{
 
-					if (canvas.isLeft(
+
+				
+				var i = Math.round(bot.MAXARC/3)-1;
+				var angFound=false;
+				var midnDist=Math.pow(bot.opt.radiusMult * bot.snakeRadius, 2);
+				var isLeft=(canvas.isLeft(
 						{ x: bot.xx, y: bot.yy }, end,
-						{ x: point.x, y: point.y })) {
+						{ x: point.x, y: point.y })) ;
+				while (i > 0 && !angFound ) {
+					var leftIndex=bot.snakeAngIndex-i;
+					var rigthIndex=bot.snakeAngIndex+i;				
+					if (leftIndex<0) leftIndex=bot.MAXARC+leftIndex;
+					if (rigthIndex>=bot.MAXARC) rigthIndex=rigthIndex-bot.MAXARC;
+
+						if (isLeft && (bot.collisionAngles[leftIndex]===undefined||bot.collisionAngles[leftIndex].distance>midnDist)){
+							ang =window.snake.ehang-bot.opt.arcSize*i;
+							angFound=true;
+						}
+						if (!isLeft && (bot.collisionAngles[rigthIndex]===undefined||bot.collisionAngles[rigthIndex].distance>midnDist))
+						{
+							ang =window.snake.ehang+bot.opt.arcSize*i;
+							angFound=true;
+						}
+					i--;
+					
+				}
+				
+				if (!angFound)
+				{
+					if (isLeft) {
 						ang = point.ang-Math.PI * 0.9;
 					} else {
 						ang = point.ang+Math.PI * 0.9;
-					}
+					}	
 				}
-				//else if (bot.leftCollision<bot.rightCollision)
-				{
-			//		ang = window.snake.ehang+Math.PI *0.5;
-				}
-			//	else
-			//		ang = window.snake.ehang-Math.PI *0.5;
-				
+								
 				bot.lastHeading=ang;
 			}
 
@@ -1935,7 +1954,7 @@ var bot = window.bot = (function (window) {
 			else
 					targetCourse = Math.min(
 							targetCourse,
-							(1750-bot.maxarea +100* driftQ) / //+ (bot.snakeWidth - closePointDist)) /
+							(1700-bot.maxarea +100* driftQ) / //+ (bot.snakeWidth - closePointDist)) /
 							bot.snakeWidth / 8);
 			
 			let t3=targetCourse;
@@ -2268,7 +2287,8 @@ var bot = window.bot = (function (window) {
             bot.MID_Y = window.grd;
             bot.MAP_R = window.grd * 0.98;
             bot.cos = Math.cos(window.snake.ang);
-            bot.sin = Math.sin(window.snake.ang);			
+            bot.sin = Math.sin(window.snake.ang);	
+			bot.snakeAngIndex = bot.getAngleIndex(window.snake.ehang);			
             bot.MAXARC = (2 * Math.PI) / bot.opt.arcSize;
             bot.xx=    window.snake.xx + window.snake.fx;// + bot.cos * Math.min(0.3, bot.speedMult - 0.7) * bot.opt.predOffset * bot.getSnakeWidth();
             bot.yy=    window.snake.yy + window.snake.fy;// + bot.sin * Math.min(0.3, bot.speedMult - 0.7) * bot.opt.predOffset * bot.getSnakeWidth();
@@ -2371,7 +2391,7 @@ var bot = window.bot = (function (window) {
                 }
             } else if ( bot.checkEncircle()) {
 				bot.encircled=bot.opt.encircleDelay * bot.encircleDanger;
-				if (!bot.dontRun)
+				//if (!bot.dontRun)
 					window.setAcceleration(1);
 
             } else {
