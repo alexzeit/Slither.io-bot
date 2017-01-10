@@ -1046,7 +1046,6 @@ var bot = window.bot = (function (window) {
 
         },
 		
-        
         // Checks to see if you are going to collide with anything in the collision detection radius
         checkCollision: function () {
             var point;
@@ -1065,7 +1064,7 @@ var bot = window.bot = (function (window) {
                 x: bot.xx + 2000 * bot.cos,
                 y: bot.yy + 2000 * bot.sin
             };
-			
+			var avoidance=false;
             for (var i = 0; i < bot.collisionPoints.length; i++) {
                 var collisionCircle = canvas.circle(
                     bot.collisionPoints[i].xx,
@@ -1076,18 +1075,12 @@ var bot = window.bot = (function (window) {
                 // -1 snake is special case for non snake object.
                 if ((point = canvas.circleIntersect(bot.headCircle, collisionCircle)))
 				{
-				
-					if (!avoidPoint && bot.inFrontAngle(point)) {
-						avoidPoint=point;
-						if (window.visualDebugging) {
-							var collisionPointCircle = canvas.circle(
-								point.x,
-								point.y,
-								15
-							);
-						 
-							canvas.drawCircle(collisionPointCircle, 'red', true);
-						}						
+					if (!avoidPoint) avoidPoint=point;
+					
+					if (!avoidance && bot.inFrontAngle(point)) {
+						avoidance=true;
+						
+						
 						
 					}
 					if (bot.collisionPoints[i].snake !== -1) {
@@ -1105,16 +1098,7 @@ var bot = window.bot = (function (window) {
 							{
 								runAway=2;
 		
-							}
-							
-
-						
-
-
-
-
-
-						
+							}											
 							
 						}
 
@@ -1148,8 +1132,18 @@ var bot = window.bot = (function (window) {
 			}
 			
 
-			if (avoidPoint)
+			if (avoidance||(danger&&danger!==avoidPoint))
 			{
+			
+				if (window.visualDebugging) {
+					var collisionPointCircle = canvas.circle(
+						avoidPoint.x,
+						avoidPoint.y,
+						15
+					);
+				 
+					canvas.drawCircle(collisionPointCircle, 'red', true);
+				}			
 				var ang = canvas.fastAtan2(
 					Math.round(avoidPoint.y - bot.yy),
 					Math.round(avoidPoint.x - bot.xx));
@@ -1768,7 +1762,7 @@ var bot = window.bot = (function (window) {
 				
 	
 				var s = window.snakes[sn];
-				var sRadius = bot.getSnakeWidth(s.sc) / 2+(bot.snakeWidth+300)*0.02*bot.opt.radiusMult/10;				
+				var sRadius = bot.getSnakeWidth(s.sc) / 2+(bot.snakeWidth+200)*0.025*bot.opt.radiusMult/10;				
 				bot.encircledSnakePoins = [];
                     for (let pts = 0, ptsNum = window.snakes[sn].pts.length;
                         pts < ptsNum; pts++) {
