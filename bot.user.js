@@ -888,7 +888,7 @@ var bot = window.bot = (function (window) {
                     };
                 } else {
                     bot.foodAngles[aIndex].sz += Math.round(f.sz);
-                    bot.foodAngles[aIndex].score += Math.pow(f.sz, 2) / f.distance;
+                    bot.foodAngles[aIndex].score=Math.max(bot.foodAngles[aIndex].score, f.sz / f.distance);//Math.pow(f.sz, 2) / f.distance;
                     if (bot.foodAngles[aIndex].distance > f.distance) {
                         bot.foodAngles[aIndex].x = Math.round(f.xx);
                         bot.foodAngles[aIndex].y = Math.round(f.yy);
@@ -1318,13 +1318,14 @@ var bot = window.bot = (function (window) {
                 y: y,
                 len: l
             }];
+			var sl=bot.snakeLength/window.snake.pts.length;
             for (let p = window.snake.pts.length - 1; p >= 0; p--) {
                 if (window.snake.pts[p].dying) {
                     continue;
                 } else {
                     let xx = window.snake.pts[p].xx;// + window.snake.pts[p].fx;
                     let yy = window.snake.pts[p].yy;// + window.snake.pts[p].fy;
-                    let ll = l + Math.sqrt(canvas.getDistance2(x, y, xx, yy));
+                    let ll = l + sl;//Math.sqrt(canvas.getDistance2(x, y, xx, yy));
                     bot.pts.push({
                         x: xx,
                         y: yy,
@@ -1573,7 +1574,8 @@ var bot = window.bot = (function (window) {
         followCircleSelf: function () {
 			
             bot.populatePts();
-            bot.determineCircleDirection();
+			if (bot.snakeLength<4000)
+				bot.determineCircleDirection();
             const o = bot.opt.followCircleDirection;
 
 			
@@ -1679,8 +1681,8 @@ var bot = window.bot = (function (window) {
 		enemyHeadDist2,
                             canvas.getDistance2(enemyHead.x,  enemyHead.y,
                                 head.x, head.y),
-                            (bot.snakeLength>3200?canvas.getDistance2(enemyAhead.x, enemyAhead.y,
-                                targetPoint.x, targetPoint.y):enemyHeadDist2)
+                            canvas.getDistance2(enemyAhead.x, enemyAhead.y,
+                                targetPoint.x, targetPoint.y)
                             );
   //                  }
                     // bodies
@@ -1743,6 +1745,8 @@ var bot = window.bot = (function (window) {
 									}
 								}
 							}
+							else
+								pts=pts+2;
                         }
 						
 					}
@@ -1794,7 +1798,7 @@ var bot = window.bot = (function (window) {
 				
 	
 				var s = window.snakes[sn];
-				var sRadius = bot.getSnakeWidth(s.sc) / 2+(bot.snakeWidth+100)*0.05*bot.opt.radiusMult/10;				
+				var sRadius = bot.getSnakeWidth(s.sc) / 2+(bot.snakeWidth+100)*0.06*bot.opt.radiusMult/10;				
 				bot.encircledSnakePoins = [];
                     for (let pts = 0, ptsNum = window.snakes[sn].pts.length;
                         pts < ptsNum; pts++) {
@@ -2197,7 +2201,7 @@ var bot = window.bot = (function (window) {
 			bot.goalCircle = canvas.circle(
 				goal.x,
 				goal.y,
-				bot.snakeWidth*1.2
+				bot.snakeWidth*1.0
 			);			
 
 							
